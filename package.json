@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "bignumber.js": "^9.3.1",
+    "fs": "^0.0.1-security",
+    "uws": "^200.0.0",
+    "web3": "1.10.0"
+  }
+}
