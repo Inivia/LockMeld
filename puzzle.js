@@ -1,10 +1,111 @@
-import {bls12_381, bls12_381_Fr} from "@noble/curves/bls12-381.js";
-import { randomBytes, bytesToNumberBE } from '@noble/curves/utils.js';
-import {mod, invert} from '@noble/curves/abstract/modular.js';
-import crypto from 'crypto';
-import BN from 'bn.js';
-const { G1, G2, pairing ,fields} = bls12_381;
-const Fp12 = fields.Fp12;
-const Fr = bls12_381_Fr;
-const order = Fr.ORDER;
+//puzzle相关功能
 
+import { randomBytes, bytesToNumberBE } from '@noble/curves/utils.js';
+import crypto from 'crypto';
+import rsorc from './rsorc.js';
+import EC  from "elliptic"; 
+import BN from "bn.js";
+import params from './params.js';
+import types from './types.js';
+import { console } from 'inspector';
+const {QuadraticForm} = types;
+const { f, h, g, q, zero, curve} = params;
+const {G1, G2, BASE2, order, Fr, Fp12,
+    pairing, mod, invert,
+    RandomEx} = rsorc;
+
+//普通曲线的阶
+const Q = q.m;
+//CL加密参数
+const Delta_K = new BN ("-7917297328878683784842235952488620683924100338715963369693275768732162831834859052302716918416013031853265985178593375655994934704463023676296364363803257769443921988228513012040548137047446483986199954435962221122006965317176921759968659376932101987729556148116190707955808747136944623277094531007901655971804163515065712136708172984834192213773138039179492400722665370317221867505959207212674207052581946756527848674480328854830559945140752059719739492686061412113598389028096554833252668553020964851121112531561161799093718416247246137641387797659",10);
+const bound = new BN ("25413151665722220203610173826311975594790577398151861612310606875883990655261658217495681782816066858410439979225400605895077952191850577877370585295070770312182177789916520342292660169492395314400288273917787194656036294620169343699612953311314935485124063580486497538161801803224580096",10);
+const g_q_a = new BN("4008431686288539256019978212352910132512184203702279780629385896624473051840259706993970111658701503889384191610389161437594619493081376284617693948914940268917628321033421857293703008209538182518138447355678944124861126384966287069011522892641935034510731734298233539616955610665280660839844718152071538201031396242932605390717004106131705164194877377",10);
+const g_q_b = new BN("-3117991088204303366418764671444893060060110057237597977724832444027781815030207752301780903747954421114626007829980376204206959818582486516608623149988315386149565855935873517607629155593328578131723080853521348613293428202727746191856239174267496577422490575311784334114151776741040697808029563449966072264511544769861326483835581088191752567148165409",10);
+const g_q_c = new BN("7226982982667784284607340011220616424554394853592495056851825214613723615410492468400146084481943091452495677425649405002137153382700126963171182913281089395393193450415031434185562111748472716618186256410737780813669746598943110785615647848722934493732187571819575328802273312361412673162473673367423560300753412593868713829574117975260110889575205719",10);
+const g_q = QuadraticForm.qfi(g_q_a, g_q_b, g_q_c);
+
+//对于adaptor sig,需要一个在普通曲线上的解和谜题
+//对于rsorc，需要一个bls12-381的谜题解和描述
+//console.log(g_q.mul(g_q.invert()));
+
+function formPuzzle(sk,pk){
+    let w = randomBytes();
+    let w1 = new BN(w).mod(Q);//普通曲线阶
+    const w2 = bytesToNumberBE(w)%order;//配对曲线阶
+    const A1 = g.mul(w1);//普通曲线点
+    const A2 = G1.Point.BASE.multiply(w2);//配对曲线G1上的点
+    let c = clEnk(pk,w1);
+    return{
+        w1:w1,
+        w2:w2,
+        A1:A1,
+        A2:A2,
+        c:c,
+    }
+}
+//cl加密
+//cl随机数
+function RandomclBN() {
+    return new BN(randomBytes()).mod(bound);
+}
+//密钥生成
+function clKeyGen() {
+    var sk = RandomclBN();
+    var pk = g_q.pow(sk);
+    return {
+        sk:sk,
+        pk:pk,
+    }
+}
+
+function clEnk(pk, m) {
+    const r = RandomclBN();
+    const c1 = g_q.pow(r);
+
+    let L = m.invm(Q);
+    if (!L.isOdd()) L = L.sub(Q);
+    const fm = QuadraticForm.qfi(Q.sqr(),L.mul(Q),L.sqr().sub(Delta_K).divn(4));
+    const c2 = pk.pow(r).mul(fm);
+
+    return {
+        c1:c1,
+        c2:c2,
+        L:L,
+        fm:fm,
+    }
+}
+function clDec(sk, c) {
+    const c1Inv = c.c1.pow(sk).invert();
+    const fm = c.c2.mul(c1Inv);
+    if (!fm.b.mod(Q).eqn(0)) {
+        console.log("Dec error");
+        return new BN(0);
+    }
+    const L = fm.b.div(Q);
+    const m =L.invm(Q);
+    return m;
+}
+//随机化cl密文
+function clRand(c,beta, pk) {
+    const c_beta = clEnk(pk, beta);
+    const newc1 = c.c1.mul(c_beta.c1);
+    const newc2 = c.c2.mul(c_beta.c2);
+    return {
+        c1: newc1,
+        c2: newc2,
+    }
+}
+//将随机化后明文还原 
+function cldRandm(m_beta, beta) {
+    let m = m_beta.sub(beta).mod(Q);
+    if (m.isNeg()) m.add(Q);
+    return m;
+}
+export default {
+    formPuzzle,
+    clKeyGen,
+    clEnk,
+    clDec,
+    clRand,
+    cldRandm,
+};

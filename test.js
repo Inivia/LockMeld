@@ -1,7 +1,7 @@
 
 import Web3 from 'web3';
 import BN from 'bn.js';
-
+import { randomBytes } from '@noble/curves/utils.js';
 import params from "./params.js";
 const { f, h, g, q, zero, curve} = params;
 import primitives from "./primitives.js";
@@ -32,10 +32,22 @@ const {
     rsorcVf,
     rsorcRandomize,
 } = rsorc;
+import types from './types.js';
+const {QuadraticForm} = types;
+import puzzle from "./puzzle.js";
+const {
+  formPuzzle,
+  clKeyGen,
+  clEnk,
+  clDec,
+  clRand,
+  cldRandm,
+} = puzzle;
 
 //const { SigmaProver } = require("./prover");
 //const { SigmaVerifier } = require("./verifier");
 import crypto  from "crypto";
+
 
 //对primitives进行测试
 testPrimitives()
@@ -44,7 +56,10 @@ testPrimitives()
 function testPrimitives() {
   //_test_commit();//测试承诺
   //_test_AdaptorSig();//测试AdaptorSig
-  _test_RSoRC();//测试可随机化承诺的可随机化签名
+  //_test_RSoRC();//测试可随机化承诺的可随机化签名
+  //_test_QF();//测试二次型运算
+  _test_cl();//测试cl加密
+  //_test_Puzzle();//测试谜题管理
 }
 
 function _test_commit() {
@@ -118,4 +133,35 @@ function _test_RSoRC(){
   console.log("Verify Randomized rsorc sig:", flag2);
 
   //console.log(rand);
+}
+function _test_QF(){
+    //console.log(g_q.reduce());
+    const qf1 = QuadraticForm.qfi(2,1,3);
+    const qf2 = QuadraticForm.qfi(2,-1,3);
+    //console.log(qf1.pow(5));
+    
+
+}  
+function _test_cl() {
+  console.log("***CL Encryption test");
+  const {sk, pk} = clKeyGen();
+  const w = randomExponent();
+  const beta = randomExponent();
+  const c = clEnk(pk, w);
+  const crand = clRand(c, beta, pk);
+  const w2 = clDec(sk, c);
+  const w_rand = clDec(sk, crand);
+  const w3 = cldRandm(w_rand, beta);
+  //console.log(c.fm.delt.eq(c.c1.delt));
+  //console.log(w2);
+  const flag = w.eq(w2);
+  const flag2 = w.eq(w3);
+  console.log("Dec correctness:",flag);
+  console.log("Dec correctness with Randomness:", flag2);
+}
+function _test_Puzzle(){
+  console.log("***Puzzle test");
+  const {sk, pk} = clKeyGen();
+  
+  const puz = formPuzzle(sk, pk);
 }
