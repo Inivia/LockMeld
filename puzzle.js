@@ -10,9 +10,7 @@ import types from './types.js';
 import { console } from 'inspector';
 const {QuadraticForm} = types;
 const { f, h, g, q, zero, curve} = params;
-const {G1, G2, BASE2, order, Fr, Fp12,
-    pairing, mod, invert,
-    RandomEx} = rsorc;
+const {G1, G2, BASE2, order, Fr, Fp12,} = rsorc;
 
 //普通曲线的阶
 const Q = q.m;
@@ -28,7 +26,7 @@ const g_q = QuadraticForm.qfi(g_q_a, g_q_b, g_q_c);
 //对于rsorc，需要一个bls12-381的谜题解和描述
 //console.log(g_q.mul(g_q.invert()));
 
-function formPuzzle(sk,pk){
+function formPuzzle(pk){
     let w = randomBytes();
     let w1 = new BN(w).mod(Q);//普通曲线阶
     const w2 = bytesToNumberBE(w)%order;//配对曲线阶

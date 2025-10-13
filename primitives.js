@@ -10,7 +10,7 @@ import params from './params.js';
 import _serialize from './serialize.js';
 const { serialize, representate }=_serialize;
 import Web3 from 'web3';
-
+const { f, h, g, q, zero, curve} = params;
 function toBN10(str) {
   return new BN(str, 10);
 }
@@ -50,6 +50,15 @@ function randomGroupElement() {
       return params.curve.point(seed_red.fromRed(), y.fromRed());
     }
     seed_red.redIAdd(new BN(1).toRed(params.p));
+  }
+}
+//生成密钥对
+function ChainKeyGen(){
+  const sk = randomExponent();
+  const pk = g.mul(sk);
+  return {
+    sk:sk,
+    pk:pk,
   }
 }
 //生成ZKproof挑战值
@@ -109,26 +118,26 @@ function newFactor(x, a, coefficients) {
 }
 //基于ECDSA的adaptor signature
 //Y=g*y的谜题 m为信息(的hash值) g为生成元 q为群的阶
-function AdaptorPreSig(m, g, q, Y, sk) {
+function AdaptorPreSig(m, Y, sk) {
   //生成预签名
   var k, Rtilde, R, r, s;
-  q = q.m; //q回到BN格式
+  const _q = q.m; //q回到BN格式
   do{
     do {
       k= randomExponent();
       Rtilde = g.mul(k);
       R=Y.mul(k);
-      r=R.getX().mod(q);
+      r=R.getX().mod(_q);
     }while (r.isZero());
     
-    const kinv = k.invm(q);
-    s = m.add(sk.mul(r)).mod(q);
-    s = s.mul(kinv).mod(q);
+    const kinv = k.invm(_q);
+    s = m.add(sk.mul(r)).mod(_q);
+    s = s.mul(kinv).mod(_q);
 
   //console.log('RtildeSig:',Rtilde.encode('hex', true));
   }while (s.isZero());
   //生成证明
-  var pi=zkDHTupleProve(q, g, Y, Rtilde, R, k);
+  var pi=zkDHTupleProve(_q, g, Y, Rtilde, R, k);
 
   return {
     r:r,
@@ -138,20 +147,20 @@ function AdaptorPreSig(m, g, q, Y, sk) {
     pi:pi
   }
 }
-function AdaptorPreVf(m, g, q, sig, Y, pk) {
-  q = q.m;
+function AdaptorPreVf(m, sig, Y, pk) {
+  const _q = q.m;
   //范围检查
-  if (sig.r.isZero() || sig.s.isZero() || sig.r.gte(q) || sig.s.gte(q)) return false;
+  if (sig.r.isZero() || sig.s.isZero() || sig.r.gte(_q) || sig.s.gte(_q)) return false;
   
-  const sInv = sig.s.invm(q);
-  const u = m.mul(sInv).mod(q);
-  const v = sig.r.mul(sInv).mod(q);
+  const sInv = sig.s.invm(_q);
+  const u = m.mul(sInv).mod(_q);
+  const v = sig.r.mul(sInv).mod(_q);
   const Rtilde = g.mul(u).add(pk.mul(v));
   //console.log('RtildeVf:',Rtilde.encode('hex', true));
-  const _xR = Rtilde.getX().mod(q);
-  const xR = sig.Rtilde.getX().mod(q);
+  const _xR = Rtilde.getX().mod(_q);
+  const xR = sig.Rtilde.getX().mod(_q);
   if (!xR.eq(_xR)) return false;
-  if (!zkFHTupleVf(sig.pi, g, q, Y, sig.Rtilde, sig.R)) return false;
+  if (!zkFHTupleVf(sig.pi, g, _q, Y, sig.Rtilde, sig.R)) return false;
 
   return true;
 }
@@ -195,9 +204,9 @@ function zkFHTupleVf(proof, g, q, Y, U, V) {
 
 }
 
-function Adapt(presig,y,q){
-  q=q.m;
-  const yInv=y.invm(q);
+function Adapt(presig,y){
+  const _q=q.m;
+  const yInv=y.invm(_q);
   var sig={
     r:presig.r,
     s:presig.s,
@@ -206,28 +215,28 @@ function Adapt(presig,y,q){
     pi:presig.pi
   }
 
-  sig.s=sig.s.mul(yInv).mod(q);
+  sig.s=sig.s.mul(yInv).mod(_q);
   return sig;
 }
 
-function ExtractFromSig(presig, sig ,q, Y){
-  q = q.m;
-  const sInv=sig.s.invm(q);
+function ExtractFromSig(presig, sig , Y){
+  const _q = q.m;
+  const sInv=sig.s.invm(_q);
   //console.log("sig.s:",sig.s);
   //console.log("presig.s:",presig.s);
-  const _y = sInv.mul(presig.s).mod(q);
+  const _y = sInv.mul(presig.s).mod(_q);
   
   return _y;
 
 }
-function ecdsaVf(m,sig,pk,g,q) {
-  q = q.m;
+function ecdsaVf(m,sig,pk) {
+  const _q = q.m;
   //范围检查
-  if (sig.r.isZero() || sig.s.isZero() || sig.r.gte(q) || sig.s.gte(q)) return false;
+  if (sig.r.isZero() || sig.s.isZero() || sig.r.gte(_q) || sig.s.gte(_q)) return false;
   
-  const sInv = sig.s.invm(q);
-  const u = m.mul(sInv).mod(q);
-  const v = sig.r.mul(sInv).mod(q);
+  const sInv = sig.s.invm(_q);
+  const u = m.mul(sInv).mod(_q);
+  const v = sig.r.mul(sInv).mod(_q);
   const R = g.mul(u).add(pk.mul(v));
   //console.log('RtildeVf:',Rtilde.encode('hex', true));
   const xR = sig.r;
@@ -252,4 +261,5 @@ export default {
   Adapt,
   ExtractFromSig,
   ecdsaVf,
+  ChainKeyGen,
 };

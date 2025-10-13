@@ -53,7 +53,14 @@ function rsorcPkGen(sk) {
         y2:y2
     }
 }
-
+function rsorcKeyGen() {
+    const sk = rsorcSkGen();
+    const pk = rsorcPkGen(sk);
+    return {
+        sk:sk,
+        pk:pk,
+    }
+}
 function rsorcSign(sk, statement, com1, com2) {
     const r = RandomEx();
     const rInv = invert(r,order);
@@ -132,8 +139,7 @@ export default {
     RandomEx,
     RandomG1Point,
     commit,
-    rsorcSkGen,
-    rsorcPkGen,
+    rsorcKeyGen,
     rsorcSign,
     rsorcVf,
     rsorcRandomize,

@@ -1,5 +1,3 @@
-
-import Web3 from 'web3';
 import BN from 'bn.js';
 import { randomBytes } from '@noble/curves/utils.js';
 import params from "./params.js";
@@ -12,6 +10,7 @@ const { randomExponent,
   Adapt,
   ExtractFromSig,
   ecdsaVf,
+  ChainKeyGen,
 } =primitives;
 import seri from "./serialize.js";
 const {
@@ -26,8 +25,7 @@ const {
     RandomEx,
     RandomG1Point,
     commit,
-    rsorcSkGen,
-    rsorcPkGen,
+    rsorcKeyGen,
     rsorcSign,
     rsorcVf,
     rsorcRandomize,
@@ -43,6 +41,14 @@ const {
   clRand,
   cldRandm,
 } = puzzle;
+import pcct from "./pcct.js";
+const {
+  PuzzleRequest,
+  PuzzlePromise,
+  PuzzleSove,
+  ProcessEscrow,
+  ProcessRedeem,
+} = pcct;
 
 //const { SigmaProver } = require("./prover");
 //const { SigmaVerifier } = require("./verifier");
@@ -58,8 +64,9 @@ function testPrimitives() {
   //_test_AdaptorSig();//测试AdaptorSig
   //_test_RSoRC();//测试可随机化承诺的可随机化签名
   //_test_QF();//测试二次型运算
-  _test_cl();//测试cl加密
+  //_test_cl();//测试cl加密
   //_test_Puzzle();//测试谜题管理
+  _test_PCCT();//测试链下流程整合
 }
 
 function _test_commit() {
@@ -164,4 +171,54 @@ function _test_Puzzle(){
   const {sk, pk} = clKeyGen();
   
   const puz = formPuzzle(sk, pk);
+}
+
+function _test_PCCT(){
+  console.log("###Step1: PuzzleRequest.###");
+  const v =20;
+  const addrR = "1234567890";
+  const PuzReq = PuzzleRequest(v, addrR);
+  //console.log(PuzReq);
+
+  console.log("\n###Step2: PuzzlePromise.###");
+  const ctxR = "1234567asdfghj";
+  const hash=crypto.createHash("sha256").update(ctxR).digest("hex");
+  const ctxRH=new BN(hash,16);
+  const clKey = clKeyGen();
+  const Ch2Key = ChainKeyGen();
+  const rsKey = rsorcKeyGen();
+  const com_2 = RandomG1Point();
+  const PuzPro = PuzzlePromise (clKey, Ch2Key, rsKey, ctxRH, PuzReq.com_R, com_2);
+  //console.log(PuzPro);
+  console.log("Witness generated: ",PuzPro.puzzle.w1);
+  console.log("\n###Step3: PuzzleSove.###");
+  const ctxS = "987654321kjhgfdsa";
+  const hashs=crypto.createHash("sha256").update(ctxR).digest("hex");
+  const ctxSH=new BN(hashs,16);
+  
+  const A1 = PuzPro.puzzle.A1;
+  const A2 = PuzPro.puzzle.A2;
+  const Rsig = PuzPro.Rsig;
+  const Asig = PuzPro.Asig;
+  const c = PuzPro.puzzle.c;
+  const Ch1Key = ChainKeyGen();
+  const PuzSov =PuzzleSove(A1, A2, Rsig, Asig, c, rsKey.pk, Ch2Key.pk, clKey.pk, ctxSH, ctxRH, PuzReq.com_R, com_2, Ch1Key);
+  //console.log(PuzSov);
+
+  console.log("\n###Step4: Process Escrow.###")
+  const A1r = PuzSov.A1Rand;
+  const A2r = PuzSov.A2Rand;
+  const cr = PuzSov.cRand;
+  const com_S = PuzSov.com_S;
+  const com_2r = PuzSov.com_2;
+  const Asigr = PuzSov.Asig;
+  const Rsigr = PuzSov.Rsig;
+  const SenderSig=ProcessEscrow(clKey, Ch2Key, rsKey, ctxSH, cr, A1r, A2r, com_S, com_2r, Asigr, Rsigr ,Ch1Key.pk);
+
+  console.log("\n###Step5: Process Redeem.###")
+  //console.log(SenderSig);
+  //console.log(Asigr);
+  const PR = ProcessRedeem(SenderSig, Asigr, Asig, A1r,  PuzSov.beta, ctxRH, Ch2Key.pk);
+  
+  console.log("Witness extracted:",PR.w);
 }
