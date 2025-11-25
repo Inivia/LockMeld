@@ -1,7 +1,7 @@
 import BN from 'bn.js';
 import { randomBytes } from '@noble/curves/utils.js';
 import params from "./params.js";
-const { f, h, g, q, zero, curve} = params;
+const { f, h, g, q, p, zero, curve} = params;
 import primitives from "./primitives.js";
 const { randomExponent, 
   randomGroupElement, 
@@ -14,11 +14,7 @@ const { randomExponent,
 } =primitives;
 import seri from "./serialize.js";
 const {
-  serialize,
-  deserialize,
-  serializeSigmaProof,
-  serializeAux,
-  toBytes,
+  serializeG1Point,
 }=seri;
 import rsorc from "./rsorc.js";
 const {
@@ -29,6 +25,7 @@ const {
     rsorcSign,
     rsorcVf,
     rsorcRandomize,
+    BASE2,
 } = rsorc;
 import types from './types.js';
 const {QuadraticForm} = types;
@@ -41,6 +38,14 @@ const {
   clRand,
   cldRandm,
 } = puzzle;
+import ZKProof from './ZKProof.js';
+const {R1Proof, SigmaProof, 
+R1Prover,
+R1Verifier,
+SigmaProver,
+SigmaVerifier,
+convertToSigma,
+} = ZKProof;
 import pcct from "./pcct.js";
 const {
   PuzzleRequest,
@@ -66,7 +71,8 @@ function testPrimitives() {
   //_test_QF();//测试二次型运算
   //_test_cl();//测试cl加密
   //_test_Puzzle();//测试谜题管理
-  _test_PCCT();//测试链下流程整合
+  //_test_ZKProof();
+  //_test_PCCT();//测试链下流程整合
 }
 
 function _test_commit() {
@@ -79,8 +85,7 @@ function _test_commit() {
     var res3 = commit(m1+m2,r1+r2);
     var res4 = res.add(res2);
     console.log('***Commit homomorphic test:', eval(res3.equals(res4))); 
-    //console.log('C(m1+m2,r1+r2)= ',res3.toBytes());
-    //console.log('C1+C2= ', res4.toBytes());
+    console.log(serializeG1Point(res));
     
 }
 
@@ -171,6 +176,73 @@ function _test_Puzzle(){
   const {sk, pk} = clKeyGen();
   
   const puz = formPuzzle(sk, pk);
+}
+function _test_R1Proof(h,b,n,m) {
+  console.log("***Start R1 prove...");
+  const r =RandomEx();
+  const r1prover = new R1Prover(h,b,r,n,m);
+  const r1proof = new R1Proof;
+  r1prover.prove(r1proof);
+  //console.log(r1proof);
+  const r1vf = new R1Verifier(h, r1prover.B_commit, n, m);
+  const r1flag = r1vf.verify(r1proof);
+  console.log("***Verify:",r1flag);
+}
+
+function _test_ZKProof(){
+  const n = 4;
+  const m = 2;
+  const _h = new Array();
+  const b =new Array();
+  const r =RandomEx();
+  let h;
+  for (let i = 0; i < m; i++) {
+    h = RandomG1Point();
+    _h.push(h);
+    b.push(BigInt(1));
+    for (let j = 1; j < n; j++) {
+      h = RandomG1Point();
+      _h.push(h);
+      b.push(BigInt(0));
+    }
+  }
+  //console.log(_h);
+  // b[0] = BigInt(0);
+  // b[4] = BigInt(0);
+  // b[1] = BigInt(1);
+  // b[5] = BigInt(1);
+  // console.log(b);
+  
+  console.log("***Start OOOM prove...");
+  const N =16;
+  const index=5;
+  const h_gens = new Array(n * m);
+  for (let i = 0; i < h_gens.length; i++) {
+    h_gens[i] = RandomG1Point();
+  }
+  h_gens[0] = BASE2;
+  const sigprover = new SigmaProver(h_gens,n,m);
+  const commits = new Array();
+  const zero = BigInt(0);
+    for (let i = 0; i < N; i++) {
+    if (i == index) {
+      const c = commit(zero, r);
+      commits.push(c);
+    } else {
+      commits.push(RandomG1Point());
+    }
+  }
+  const sigproof = sigprover.prove(commits, index, r);
+  //console.log(sigproof);
+  const sigvf = new SigmaVerifier(h_gens,n,m);
+  const sigflag = sigvf.verify(commits, sigproof);
+  console.log("***Verify:",sigflag);
+
+   const sigma = convertToSigma(index,n ,m);
+  // _test_R1Proof(_h,b,n,m);
+  // _test_R1Proof(h_gens,b,n,m);
+   //_test_R1Proof(h_gens,sigma,n,m);
+
 }
 
 function _test_PCCT(){

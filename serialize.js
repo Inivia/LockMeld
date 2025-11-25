@@ -52,7 +52,25 @@ function serializeAux(aux) {
   result.push(aux.h_gens.map((item) => serialize(item)));
   return result;
 }
+//将G曲线上的点序列化为32byte的字符串x2
+function serializeG1Point(point) {
+  var x = point.X.toString(16);
+  var y = point.Y.toString(16);
+    //console.log(x.length);
+    while (x.length < 96 ) x = '0'+x;
+    while (y.length < 96 ) y = '0'+y;
+  const x_0 = x.slice(0,32);
+  const x_1 = x.slice(32,96);
+  const X = ['0x' + '0'.repeat(32)+x_0, '0x'+x_1];
+  const y_0 = y.slice(0,32);
+  const y_1 = y.slice(32,96);
+  const Y = ['0x' + '0'.repeat(32)+y_0, '0x'+y_1];
+  return {
+    x:X,
+    y:Y,
+  }
 
+}
 export default {
   toBytes,
   representate,
@@ -60,4 +78,5 @@ export default {
   deserialize,
   serializeSigmaProof,
   serializeAux,
+  serializeG1Point,
 };

@@ -18,19 +18,7 @@ function toBN10(str) {
 function commit(g, m, h, r) {
   return g.mul(m).add(h.mul(r));
 }
-//计算线性组合
-function multiExponents(h, exp) {
-  let tmp = params.zero;
-  h.forEach((item, index) => {
-    tmp = tmp.add(item.mul(exp[index]));
-  });
-  return tmp;
-}
-//按bit承诺
-function commitBits(g, h, exp, r) {
-  const tmp = multiExponents(h, exp);
-  return g.mul(r).add(tmp);
-}
+
 //生成一个随机的乘数（标量）
 function randomExponent() {
   return new BN(crypto.randomBytes(32)).mod(params.curve.n);
@@ -61,23 +49,6 @@ function ChainKeyGen(){
     pk:pk,
   }
 }
-//生成ZKproof挑战值
-function generateChallenge(group_elements) {
-  const mapped_params = group_elements.map((elem) => {
-    return serialize(elem);
-  });
-
-  const web3 = new Web3();
-  const encoded = web3.eth.abi.encodeParameters(
-    ["struct(bytes32,bytes32)[]"],
-    [mapped_params]
-  );
-  const sha256 = crypto.createHash("sha256");
-  sha256.update(Buffer.from(encoded.slice(2), "hex"));
-  const hash_out = sha256.digest("hex");
-  const result_out = new BN(hash_out, "hex");
-  return result_out;
-}
 //把大数变成m进制（零知识相关）
 function convertToSigma(num, n, m) {
   const out = new Array();
@@ -92,20 +63,6 @@ function convertToSigma(num, n, m) {
   return out;
 }
 
-function convertToNal(num, n, m) {
-  const out = new Array();
-  var j = 0;
-  while (num != 0) {
-    const rem = num % n;
-    num = Math.floor(num / n);
-    out.push(rem);
-    j++;
-  }
-  if (out.length > m) return out.slice(0, m);
-  if (out.length < m)
-    out.splice(out.length, 0, ...new Array(m - out.length).fill(0));
-  return out;
-}
 //多项式中添加新的因子(x*t+a)，t为变量
 function newFactor(x, a, coefficients) {
   const degree = coefficients.length;//最高次项的次数
@@ -248,14 +205,8 @@ function ecdsaVf(m,sig,pk) {
 export default {
   toBN10,
   commit,
-  multiExponents,
-  commitBits,
   randomExponent,
   randomGroupElement,
-  generateChallenge,
-  newFactor,
-  convertToNal,
-  convertToSigma,
   AdaptorPreSig,
   AdaptorPreVf,
   Adapt,

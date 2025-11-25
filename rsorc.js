@@ -7,10 +7,12 @@ const { G1, G2, pairing ,fields} = bls12_381;
 const Fp12 = fields.Fp12;
 const Fr = bls12_381_Fr;
 const order = Fr.ORDER;
-const base2 = BigInt("22824058396503438075525774212889175598789903735559148755085891678973294908085");
-const BASE2 = G1.Point.BASE.multiply(base2);
-
-
+const BASE2 = G1.Point.BASE.multiply(BigInt("7"));
+const BASE3 = G1.Point.BASE.multiply(BigInt("11"));
+//console.log("Fr order",order.toString(16));
+//console.log(G1.Point.BASE.X.toString(16).length, G1.Point.BASE.Y.toString(16));
+//console.log(BASE2.X.toString(16), BASE2.Y.toString(16));
+//console.log(BASE3.X.toString(16), BASE3.Y.toString(16));
 //G1上的随机mask（乘数）
 function RandomEx() {
     const r = randomBytes();
@@ -29,7 +31,29 @@ function RandomG1Point() {
 function commit(m, r) {
     m = m%order;
     r = r%order; 
+    if (m===BigInt(0)) return BASE2.multiply(r);
   return G1.Point.BASE.multiply(m).add(BASE2.multiply(r));
+}
+
+//bit承诺（用于证明）h是点数组 exp是比特串
+function commitBits(h, exp, r) {
+    let tmp = G1.Point.ZERO;
+    h.forEach((item, index) => {
+        //console.log(exp[index]);
+        exp[index] = (exp[index]%order+order)%order;
+        if (exp[index]!==BigInt(0)) tmp = tmp.add(item.multiply(exp[index]));
+    })
+    return G1.Point.BASE.multiply(r).add(tmp);
+}
+function multiExponents(h,exp) {
+    let tmp = G1.Point.ZERO;
+    h.forEach((item, index) => {
+        //console.log(exp[index]);
+        //console.log(item);
+        exp[index] = (exp[index]%order+order)%order;
+        if (exp[index]!==BigInt(0)) tmp = tmp.add(item.multiply(exp[index]));
+    })
+    return tmp;
 }
 
 function rsorcSkGen() {
@@ -42,7 +66,6 @@ function rsorcSkGen() {
         x2:x2
     };
 }
-
 function rsorcPkGen(sk) {
     const y0 = G2.Point.BASE.multiply(sk.x0);
     const y1 = G2.Point.BASE.multiply(sk.x1);
@@ -139,6 +162,8 @@ export default {
     RandomEx,
     RandomG1Point,
     commit,
+    commitBits,
+    multiExponents,
     rsorcKeyGen,
     rsorcSign,
     rsorcVf,
