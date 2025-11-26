@@ -15,11 +15,7 @@ const { randomExponent,
 } =primitives;
 import seri from "./serialize.js";
 const {
-  serialize,
-  deserialize,
-  serializeSigmaProof,
-  serializeAux,
-  toBytes,
+ctxHash,
 }=seri;
 import rsorc from "./rsorc.js";
 const {
@@ -52,6 +48,7 @@ function PuzzleRequest (v, addrR) {
     return {
         addrR: addrR,
         com_R:com_v,
+        r:com_r
     }
 }
 //由Tumbler执行，生成谜题及相关签名
@@ -59,11 +56,11 @@ function PuzzleRequest (v, addrR) {
 function PuzzlePromise (clKey, Ch2Key, rsorcKey, ctxR, com_R, com_2) {
     console.log("Form Puzzle...");
     const puz = formPuzzle(clKey.pk);
-    console.log("done.");
-    console.log("Adaptor Sig...");
+    //console.log("done.");
+    //console.log("Adaptor Sig...");
     const Asig = AdaptorPreSig(ctxR, puz.A1, Ch2Key.sk);
-    console.log("done.");
-    console.log("RSoRC Sig...");
+    //console.log("done.");
+    //console.log("RSoRC Sig...");
     const rsorcSig = rsorcSign (rsorcKey.sk, puz.A2, com_R, com_2);
     console.log("done.");
     return {
@@ -73,8 +70,8 @@ function PuzzlePromise (clKey, Ch2Key, rsorcKey, ctxR, com_R, com_2) {
     }
 }
 //由Sender执行，负责检验PuzPro提供的签名，以及提供OOOMProof和新的Adaptorsig
-function PuzzleSove(A1, A2, Rsig, Asig, c, TrsPk, TChPk, TClPK, ctxS, ctxR, com_R, com_2, Ch1Key) {
-    console.log("Start Verifying...");
+function PuzzleSove(s,r,A1, A2, Rsig, Asig, c, TrsPk, TChPk, TClPK,  ctxR, com_R, com_2, Ch1Key) {
+    console.log("Request Puzzle soving...");
     if (!AdaptorPreVf(ctxR, Asig, A1, TChPk)) {
         console.log("Adaptor Signature Invalid!");
         return;
@@ -83,21 +80,23 @@ function PuzzleSove(A1, A2, Rsig, Asig, c, TrsPk, TChPk, TClPK, ctxS, ctxR, com_
         console.log("RSoRC Signature Invalid!");
         return;
     }
-    console.log("done.");
+    //console.log("done.");
 
-    console.log("Randomize RSORC tuples...");
+    //console.log("Randomize RSORC tuples...");
     //随机数r1使得w'=w+r1
     const rand = rsorcRandomize(Rsig, A2, com_R, com_2);
     const r1BN = new BN(rand.r1.toString()).mod(q.m);
     const A1Rand = A1.add(g.mul(r1BN));
     const cRand = clRand(c, r1BN, TClPK);
-    console.log("done.");
+    //console.log("done.");
 
-    console.log("Adaptor Sig...");
-    const AsigS = AdaptorPreSig(ctxS, A1Rand, Ch1Key.sk);
-    console.log("done.");
+    //console.log("Adaptor Sig...");
+    const ctxSHash = ctxHash(s,r,rand.com1);
+    const _ctxS = new BN(ctxSHash,16);
+    const AsigS = AdaptorPreSig(_ctxS, A1Rand, Ch1Key.sk);
+    //console.log("done.");
 
-    console.log("generate OOOM Proof...");
+    //console.log("generate OOOM Proof...");
     const pi ={};
     console.log("done.");
     return {
@@ -109,13 +108,14 @@ function PuzzleSove(A1, A2, Rsig, Asig, c, TrsPk, TChPk, TClPK, ctxS, ctxR, com_
         A2Rand: rand.statement,
         com_S: rand.com1,
         com_2: rand.com2,
+        ctxS: _ctxS,
         pi: pi,
     }
 
 }
 
 //由Tumbler执行，检验完Sender提供的数据后，解密并完成Adaptor sig
-function ProcessEscrow(clKey, Ch2Key, rsorcKey, ctxS, c, A1, A2, com_S, com_2, Asig, Rsig, Spk){
+function ProcessEscrow(clKey, rsorcKey, ctxS, c, A1, A2, com_S, com_2, Asig, Rsig, Spk){
     console.log("Start Verifying...");
     if (!AdaptorPreVf(ctxS, Asig, A1, Spk)) {
         console.log("Adaptor Signature Invalid!");
@@ -125,25 +125,26 @@ function ProcessEscrow(clKey, Ch2Key, rsorcKey, ctxS, c, A1, A2, com_S, com_2, A
         console.log("RSoRC Signature Invalid!");
         return;
     }
-    console.log("done.");
+    //console.log("done.");
 
-    console.log("Start CL Decryption...");
+    //console.log("Start CL Decryption...");
     const w = clDec(clKey.sk, c);
-    console.log("done.")
-    console.log("Adapt to complete sig...");
+    //console.log("done.")
+    //console.log("Adapt to complete sig...");
     const newAsig = Adapt(Asig,w);
-    console.log(ecdsaVf(ctxS, newAsig, Spk));
-
+    //console.log(ecdsaVf(ctxS, newAsig, Spk));
+    if (!ecdsaVf(ctxS, newAsig, Spk)) return;
+    console.log("success.")
     return newAsig;
 }
 
 //由Receiver执行，从Tumbler生成的完整签名中提取出秘密值并解随机化，生成自己的完整签名
 function ProcessRedeem(Ssig, Spresig, Tpresig, A1r,  beta, ctxR, pk){
-    console.log("Extract from sig and presig...");
+    //console.log("Extract from sig and presig...");
     const w_beta = ExtractFromSig(Spresig, Ssig, A1r);
     const betaBN = new BN(beta.toString()).mod(q.m);
     const w = cldRandm(w_beta, betaBN);
-    console.log("done.")
+    //console.log("done.")
     console.log("Adapt to complete sig...")
     const newAsig = Adapt(Tpresig, w);
     console.log(ecdsaVf(ctxR, newAsig, pk));

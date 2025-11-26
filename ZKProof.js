@@ -40,7 +40,7 @@ function generateChallenge(points){
     let msg;
     for (let i=0;i<points.length;i++) {
         const m = serializeG1Point(points[i]);
-        const _m = m.x[0].slice(2)+m.x[1].slice(2)+m.y[0].slice(2)+m.y[1].slice(2);
+        const _m = m[0][0].slice(2)+m[0][1].slice(2)+m[1][0].slice(2)+m[1][1].slice(2);
         msg+=_m;
     }
     //console.log(_m);

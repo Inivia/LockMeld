@@ -15,6 +15,7 @@ const { randomExponent,
 import seri from "./serialize.js";
 const {
   serializeG1Point,
+  ctxHash
 }=seri;
 import rsorc from "./rsorc.js";
 const {
@@ -25,7 +26,7 @@ const {
     rsorcSign,
     rsorcVf,
     rsorcRandomize,
-    BASE2,
+    BASE2,G1,
 } = rsorc;
 import types from './types.js';
 const {QuadraticForm} = types;
@@ -70,11 +71,19 @@ function testPrimitives() {
   //_test_RSoRC();//测试可随机化承诺的可随机化签名
   //_test_QF();//测试二次型运算
   //_test_cl();//测试cl加密
+ // _test_cl_2() 
   //_test_Puzzle();//测试谜题管理
-  //_test_ZKProof();
+  _test_ZKProof();
   //_test_PCCT();//测试链下流程整合
-}
+  //_test_commit2();
 
+    
+}
+function _test_commit2(){
+    const x = RandomG1Point();
+    const x2 = x.multiply(BigInt(2));
+    console.log(x2);
+}
 function _test_commit() {
     const m1 = RandomEx();                            
     const r1 = RandomEx();
@@ -129,18 +138,22 @@ function _test_AdaptorSig() {
 
 function _test_RSoRC(){
   console.log("***Test RSoRC***")
-  const sk = rsorcSkGen();
-  const pk = rsorcPkGen(sk);
+  const {sk,pk} = rsorcKeyGen();
   //console.log("sk:",sk);
   //console.log("pk:",pk);
   const state = RandomG1Point();
   const com1 = RandomG1Point();
   const com2 = RandomG1Point();
+  console.log("com1:",com1);
   const sig = rsorcSign(sk, state, com1, com2);
   //console.log(sig);
   const flag1 = rsorcVf(pk,sig,state,com1, com2);
   console.log("Verify rsorc sig:", flag1);
   const rand = rsorcRandomize(sig, state, com1, com2);
+  console.log("com1':", rand.com1);
+  const commtBeta = commit(BigInt(0),rand.r1);
+  const addcom1=com1.add(commtBeta);
+  console.log(addcom1.add((commtBeta).negate()).toAffine());
   const flag2 = rsorcVf(pk,rand.sig,rand.statement,rand.com1,rand.com2);
   console.log("Verify Randomized rsorc sig:", flag2);
 
@@ -165,12 +178,27 @@ function _test_cl() {
   const w_rand = clDec(sk, crand);
   const w3 = cldRandm(w_rand, beta);
   //console.log(c.fm.delt.eq(c.c1.delt));
-  //console.log(w2);
+  console.log(w2);
+  console.log(w_rand);
   const flag = w.eq(w2);
   const flag2 = w.eq(w3);
   console.log("Dec correctness:",flag);
   console.log("Dec correctness with Randomness:", flag2);
 }
+function _test_cl_2() {
+  const {sk, pk} = clKeyGen();
+  let sum_cpt = clEnk(pk,new BN(0));
+
+  const r_ = new BN("34596432121518698584817730625276513039722785738146466726094573873909439627402").mod(q.m);
+  sum_cpt = clRand(sum_cpt, r_, pk);//同态加Enk(r+beta)
+  console.log(clDec(sk,sum_cpt));
+  
+  sum_cpt = clEnk(pk,new BN("c611a5fb1f031ffd740184efe4d6d3e6bf6f3c3ac0e7977d302fbda25af69238",16));
+  const r_2 = new BN("34596432121518698584817730625276513039722785738146466726094573873909439627402").mod(q.m);
+  sum_cpt = clRand(sum_cpt, r_2, pk);//同态加Enk(r+beta)
+  console.log(clDec(sk,sum_cpt));
+}
+
 function _test_Puzzle(){
   console.log("***Puzzle test");
   const {sk, pk} = clKeyGen();
@@ -223,15 +251,19 @@ function _test_ZKProof(){
   h_gens[0] = BASE2;
   const sigprover = new SigmaProver(h_gens,n,m);
   const commits = new Array();
+  const beta = RandomEx();
+  const tmp = RandomG1Point();
+  const tmp_neg = tmp.negate();
   const zero = BigInt(0);
     for (let i = 0; i < N; i++) {
     if (i == index) {
-      const c = commit(zero, r);
+      const c = commit(zero, r).add(tmp).add(tmp_neg);
       commits.push(c);
     } else {
-      commits.push(RandomG1Point());
+      commits.push(RandomG1Point().add(tmp).add(tmp_neg));
     }
   }
+  console.log(commits);
   const sigproof = sigprover.prove(commits, index, r);
   //console.log(sigproof);
   const sigvf = new SigmaVerifier(h_gens,n,m);
@@ -285,7 +317,7 @@ function _test_PCCT(){
   const com_2r = PuzSov.com_2;
   const Asigr = PuzSov.Asig;
   const Rsigr = PuzSov.Rsig;
-  const SenderSig=ProcessEscrow(clKey, Ch2Key, rsKey, ctxSH, cr, A1r, A2r, com_S, com_2r, Asigr, Rsigr ,Ch1Key.pk);
+  const SenderSig=ProcessEscrow(clKey, rsKey, ctxSH, cr, A1r, A2r, com_S, com_2r, Asigr, Rsigr ,Ch1Key.pk);
 
   console.log("\n###Step5: Process Redeem.###")
   //console.log(SenderSig);

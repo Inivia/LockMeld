@@ -9,6 +9,7 @@ const Fr = bls12_381_Fr;
 const order = Fr.ORDER;
 const BASE2 = G1.Point.BASE.multiply(BigInt("7"));
 const BASE3 = G1.Point.BASE.multiply(BigInt("11"));
+const ZERO = G1.Point.ZERO;
 //console.log("Fr order",order.toString(16));
 //console.log(G1.Point.BASE.X.toString(16).length, G1.Point.BASE.Y.toString(16));
 //console.log(BASE2.X.toString(16), BASE2.Y.toString(16));
@@ -157,7 +158,7 @@ function rsorcRandomize(sig,statement,com1,com2) {
 
 
 export default {
-    G1, G2, BASE2, order, Fr, Fp12,
+    G1, G2, BASE2, order, Fr, Fp12,ZERO,
     pairing, mod, invert,
     RandomEx,
     RandomG1Point,

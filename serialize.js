@@ -1,5 +1,6 @@
 //信息序列化功能
 import params from './params.js';
+import crypto  from "crypto";
 const { curve, zero } = params;
 import BN from 'bn.js';
 const EMPTY =
@@ -54,8 +55,9 @@ function serializeAux(aux) {
 }
 //将G曲线上的点序列化为32byte的字符串x2
 function serializeG1Point(point) {
-  var x = point.X.toString(16);
-  var y = point.Y.toString(16);
+  const Point = point.toAffine();
+  var x = Point.x.toString(16);
+  var y = Point.y.toString(16);
     //console.log(x.length);
     while (x.length < 96 ) x = '0'+x;
     while (y.length < 96 ) y = '0'+y;
@@ -65,12 +67,31 @@ function serializeG1Point(point) {
   const y_0 = y.slice(0,32);
   const y_1 = y.slice(32,96);
   const Y = ['0x' + '0'.repeat(32)+y_0, '0x'+y_1];
-  return {
-    x:X,
-    y:Y,
-  }
-
+  return [X,Y];
 }
+
+//将64B字符串拆成4组
+function unSeriG1(str) {
+  const x_0 = str.slice(0,64);
+  const x_1 = str.slice(64,128);
+  const y_0 = str.slice(128,192);
+  const y_1 = str.slice(192,256);
+  return {
+    x0:"0x"+x_0,
+    x1:"0x"+x_1,
+    y0:"0x"+y_0,
+    y1:"0x"+y_1,
+  }
+}
+//交易hash
+function ctxHash (adds, addr, c){
+  const seric = serializeG1Point(c);
+  const res= adds+addr+seric[0][0]+seric[0][1]+seric[1][0]+seric[1][1];
+  const  hash=crypto.createHash("sha256").update(res).digest("hex");
+  return hash;
+}
+const s="0000000000000000000000000000000017f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb0000000000000000000000000000000008b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1";
+//console.log(unSeriG1(s));
 export default {
   toBytes,
   representate,
@@ -79,4 +100,5 @@ export default {
   serializeSigmaProof,
   serializeAux,
   serializeG1Point,
+  ctxHash,
 };
