@@ -201,6 +201,29 @@ function ecdsaVf(m,sig,pk) {
 
   return true;
 }
+function ecdsaSig(m,sk) {
+  const _q = q.m;
+  let k, R, xR, r, s;
+  
+  do {
+    do {
+      k= randomExponent();  // 生成 1 到 q-1 之间的随机大整数
+    } while (k.isZero());
+    
+    R = g.mul(k);
+    r = R.getX().mod(_q);
+    if (r.isZero()) continue;
+    
+    // 计算 s = k^-1 * (m + r * sk) mod q
+    const kInv = k.invm(_q);
+    const mPlusRsk = m.add(r.mul(sk)).mod(_q);
+    s = kInv.mul(mPlusRsk).mod(_q);
+    
+    // 如果 s = 0，重新选择 k
+  } while (s.isZero());
+  
+  return { r: r, s: s };
+}
 
 export default {
   toBN10,
@@ -212,5 +235,6 @@ export default {
   Adapt,
   ExtractFromSig,
   ecdsaVf,
+  ecdsaSig,
   ChainKeyGen,
 };

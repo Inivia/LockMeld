@@ -71,6 +71,7 @@ function clEnk(pk, m) {
         L:L,
         fm:fm,
     }
+    //return m
 }
 function clDec(sk, c) {
     const c1Inv = c.c1.pow(sk).invert();
@@ -82,6 +83,7 @@ function clDec(sk, c) {
     const L = fm.b.div(Q);
     const m =L.invm(Q);
     return m;
+    //return c
 }
 //随机化cl密文
 function clRand(c,beta, pk) {
@@ -92,12 +94,14 @@ function clRand(c,beta, pk) {
         c1: newc1,
         c2: newc2,
     }
+    //return c
 }
 //将随机化后明文还原 
 function cldRandm(m_beta, beta) {
     let m = m_beta.sub(beta).mod(Q);
     if (m.isNeg()) m.add(Q);
     return m;
+    //return m_beta
 }
 export default {
     formPuzzle,

@@ -60,7 +60,7 @@ const providerOptions = {
 const Chain1 = new Web3(new Web3.providers.WebsocketProvider("ws://127.0.0.1:8545",providerOptions));
 const Chain2 = new Web3(new Web3.providers.WebsocketProvider("ws://127.0.0.1:7545",providerOptions));
 
-const testNum = 2;
+const testNum = 8;
 
 class chainData{
     constructor(web3){
@@ -119,8 +119,8 @@ class protocalData{
         this.rsrcKey = rsorcKeyGen(); //随机签名密钥
         this.sumRCpt = clEnk(this.clKey.pk, this.clKey.sk); // p2 tuumbler收到的加密形式r总和
         //ooom证明密钥
-        this.n = 4;
-        this.m = 2;
+        this.n = 16;
+        this.m = 8;
         this.h_gens = new Array(this.n * this.m);
         for (let i = 0; i < this.h_gens.length; i++) {
             this.h_gens[i] = RandomG1Point();
@@ -263,7 +263,7 @@ class protocalData{
                 //Chain2 tumbler->receiver
                 const comR = this.commits[ind];
                 const gas2 = await ctx(this.B2.accList[8].address, 
-                    this.B1.accList[i].address, 
+                    this.B2.accList[i].address, 
                     comR, 
                     this.B2.contract)
                 this.B2.gasUsed+=gas2;

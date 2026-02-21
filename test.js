@@ -10,11 +10,13 @@ const { randomExponent,
   Adapt,
   ExtractFromSig,
   ecdsaVf,
+  ecdsaSig,
   ChainKeyGen,
 } =primitives;
 import seri from "./serialize.js";
 const {
   serializeG1Point,
+  representate,
   ctxHash
 }=seri;
 import rsorc from "./rsorc.js";
@@ -64,16 +66,20 @@ import crypto  from "crypto";
 //对primitives进行测试
 testPrimitives()
 
+//计算数据大小
+function roughSizeOf(obj) {
+  return new TextEncoder().encode(JSON.stringify(obj)).length;
+}
 
 function testPrimitives() {
   //_test_commit();//测试承诺
-  //_test_AdaptorSig();//测试AdaptorSig
+  _test_AdaptorSig();//测试AdaptorSig
   //_test_RSoRC();//测试可随机化承诺的可随机化签名
   //_test_QF();//测试二次型运算
   //_test_cl();//测试cl加密
  // _test_cl_2() 
   //_test_Puzzle();//测试谜题管理
-  _test_ZKProof();
+  //_test_ZKProof();
   //_test_PCCT();//测试链下流程整合
   //_test_commit2();
 
@@ -95,6 +101,8 @@ function _test_commit() {
     var res4 = res.add(res2);
     console.log('***Commit homomorphic test:', eval(res3.equals(res4))); 
     console.log(serializeG1Point(res));
+    console.log("r len:", roughSizeOf(r1.toString()));
+    console.log("commit len:", roughSizeOf(serializeG1Point(res)));
     
 }
 
@@ -110,7 +118,8 @@ function _test_AdaptorSig() {
   const pk=g.mul(sk);
   const Y=g.mul(y);
   //console.log("q:",q);
-  const sig=AdaptorPreSig(_m, g, q, Y, sk);
+  const sig=AdaptorPreSig(_m, Y, sk);
+  console.log("Asig len:", roughSizeOf(sig));
   console.log('y:',y.toString(16));
   //console.log('r:',sig.r.toString(16));
   //console.log('s:',sig.s.toString(16));
@@ -119,21 +128,23 @@ function _test_AdaptorSig() {
   //生成伪签名
   var m2=crypto.createHash("sha256").update("1234").digest("hex");
   var _m2= new BN(m2,16);
-  const sig2 = AdaptorPreSig(_m2, g, q, Y, sk)
-  var flag=AdaptorPreVf(_m, g, q, sig, Y, pk);
-  var flag2=AdaptorPreVf(_m2, g, q, sig, Y, pk);
+  const sig2 = AdaptorPreSig(_m2, Y, sk)
+  var flag=AdaptorPreVf(_m, sig, Y, pk);
+  var flag2=AdaptorPreVf(_m2, sig, Y, pk);
   console.log('PreVerify with true sig:',flag);
   console.log('PreVerify with fake sig:',flag2);
 
-  var r_sig=Adapt(sig,y,q);
-  flag=ecdsaVf(_m,sig,pk,g,q);
+  var r_sig=Adapt(sig,y);
+  flag=ecdsaVf(_m,sig,pk);
   //flag=key.verify(_m,r_sig);
   console.log('Adapt sig verified by normal ecdsa:',flag);
   //console.log('new s:',r_sig.s.toString(16));
   
-  const _y=ExtractFromSig(sig, r_sig ,q, Y);
+  const _y=ExtractFromSig(sig, r_sig , Y);
   console.log('Extract _y equal to y:',_y.eq(y));
-
+  //测试普通ecdsa签名
+  const sig3 = ecdsaSig(_m, sk);
+  console.log("normal sig:", ecdsaVf(_m, sig3,pk));
 }
 
 function _test_RSoRC(){
@@ -147,6 +158,8 @@ function _test_RSoRC(){
   console.log("com1:",com1);
   const sig = rsorcSign(sk, state, com1, com2);
   //console.log(sig);
+  //console.log("puz len:", roughSizeOf(sig));
+
   const flag1 = rsorcVf(pk,sig,state,com1, com2);
   console.log("Verify rsorc sig:", flag1);
   const rand = rsorcRandomize(sig, state, com1, com2);
@@ -184,6 +197,7 @@ function _test_cl() {
   const flag2 = w.eq(w3);
   console.log("Dec correctness:",flag);
   console.log("Dec correctness with Randomness:", flag2);
+  //console.log("cl len:", roughSizeOf(c));
 }
 function _test_cl_2() {
   const {sk, pk} = clKeyGen();
@@ -203,7 +217,16 @@ function _test_Puzzle(){
   console.log("***Puzzle test");
   const {sk, pk} = clKeyGen();
   
-  const puz = formPuzzle(sk, pk);
+  const puz = formPuzzle(pk);
+  //console.log(puz);
+  const puz2 = {
+    w1:puz.w1.toString(),
+    w2:puz.w2.toString(),
+    A1:representate(puz.A1),
+    A2:serializeG1Point(puz.A2),
+    c:puz.c,
+  }
+  console.log("puz len:", roughSizeOf(puz2));
 }
 function _test_R1Proof(h,b,n,m) {
   console.log("***Start R1 prove...");
