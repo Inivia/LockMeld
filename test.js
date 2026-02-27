@@ -73,10 +73,10 @@ function roughSizeOf(obj) {
 
 function testPrimitives() {
   //_test_commit();//测试承诺
-  _test_AdaptorSig();//测试AdaptorSig
+  //_test_AdaptorSig();//测试AdaptorSig
   //_test_RSoRC();//测试可随机化承诺的可随机化签名
   //_test_QF();//测试二次型运算
-  //_test_cl();//测试cl加密
+  _test_cl();//测试cl加密
  // _test_cl_2() 
   //_test_Puzzle();//测试谜题管理
   //_test_ZKProof();

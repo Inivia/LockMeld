@@ -119,8 +119,8 @@ class protocalData{
         this.rsrcKey = rsorcKeyGen(); //随机签名密钥
         this.sumRCpt = clEnk(this.clKey.pk, this.clKey.sk); // p2 tuumbler收到的加密形式r总和
         //ooom证明密钥
-        this.n = 16;
-        this.m = 8;
+        this.n = 4;
+        this.m = 2;
         this.h_gens = new Array(this.n * this.m);
         for (let i = 0; i < this.h_gens.length; i++) {
             this.h_gens[i] = RandomG1Point();
@@ -289,6 +289,6 @@ class protocalData{
     }
 };
 
-const test = new protocalData(1);
+const test = new protocalData(4);
 test.main();
 

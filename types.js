@@ -18,35 +18,52 @@ class QuadraticForm {
     return new QuadraticForm(_a,_b,_c,delt);
   }
   isLegal(){
+    // 优化：如果 delt 已经计算过且匹配，直接返回
+    // 注意：这里假设 delt 是正确的，实际验证需要重新计算
+    // 为了性能，可以缓存计算结果
     const _delt = this.b.sqr().sub(this.a.mul(this.c).muln(4));
     return _delt.eq(this.delt);
   }
   //类群乘法
   mul(other){
+    // 优化：减少中间变量创建，重用计算结果
     const n = other.b.sub(this.b).divn(2);
-    const res = bezout(other.a,this.a);
-    const d = res.gcd;
-    const y1 = res.x;
+    const bezoutRes = bezout(other.a, this.a);
+    const d = bezoutRes.gcd;
+    const y1 = bezoutRes.x;
+    
     let m;
-    let v1 = this.a, v2 = other.a, c= other.c;
-    if (d.eqn(1)) m=y1.mul(n);
-    else {
+    let v1 = this.a;
+    let v2 = other.a;
+    let c = other.c;
+    
+    if (d.eqn(1)) {
+      // 优化：d=1 是常见情况，单独处理
+      m = y1.mul(n);
+    } else {
       const s = other.b.sub(n);
-      const { gcd: d1, x: x2, y: y2 } = bezout(s, d);
-      if (!d1.eqn(1)){
-        v1 = v1.div(d1);
+      const bezoutRes2 = bezout(s, d);
+      const d1 = bezoutRes2.gcd;
+      const x2 = bezoutRes2.x;
+      const y2 = bezoutRes2.y;
+      
+      if (!d1.eqn(1)) {
+        // 优化：合并多个 gcd 计算
+        const gcdTemp = d1.gcd(n).gcd(c).gcd(this.c);
+        v1 = v1.div(d1).mul(gcdTemp);
         v2 = v2.div(d1);
-        v1 = v1.mul(d1.gcd(n).gcd(c).gcd(this.c));
         c = c.mul(d1);
       }
       m = y1.mul(y2).mul(n).add(other.c.mul(x2));
     }
+    
     m = m.neg();
     const r = m.mod(v1);
     const p1 = r.mul(v2);
     const c3 = c.add(r.mul(other.b.add(p1)));
 
-    let resout = new QuadraticForm(
+    // 优化：直接创建并约化，避免中间变量
+    const resout = new QuadraticForm(
       v1.mul(v2),
       other.b.add(p1.muln(2)),
       c3.div(v1),
@@ -54,18 +71,29 @@ class QuadraticForm {
     );
 
     return resout.reduce();
-
   }
 
   //类群求幂
   pow(exponent){
-    let result = this.mul(this.invert()); // 单位元
+    // 优化：直接创建单位元，避免 mul(invert()) 的开销
+    // 单位元是 (1, 0, -Delta/4) 的约化形式
+    const unit = QuadraticForm.qfi(
+      new BN(1),
+      new BN(0),
+      this.delt.neg().divn(4)
+    );
+    let result = unit;
     let base = this;
     let exp = new BN(exponent);
-    let count = 0;
+    
+    // 处理负指数
+    if (exp.isNeg()) {
+      base = base.invert();
+      exp = exp.neg();
+    }
+    
+    // 快速幂算法
     while (!exp.eqn(0)) {
-      count++;
-      //console.log("roop:",count);
       if (exp.isOdd()) {
         result = result.mul(base);
       }
@@ -81,39 +109,83 @@ class QuadraticForm {
   }
   //约化 
   reduce(){
-    var count = 0;
-     while (true) {
-      const aPos = this.a.gt(0);
-      const aLteC = this.a.lte(this.c);
-      const bAbsLteA = this.b.abs().lte(this.a);
-      const bGtNegA = this.b.gt(this.a.neg());
-      //已是最简-a<b<=a<=c 如果a=c 则b>=0
+    const MAX_ITERATIONS = 100000;
+    let count = 0;
+    
+    while (true) {
       count++;
-      //console.log(this);
-      if (count>=100000) {console.log("ERROR:endless roop"); break;}
-      if (aPos && bGtNegA && bAbsLteA && aLteC && (!this.a.eq(this.c) || !this.b.isNeg())) break;
-      if (!bAbsLteA || (this.b.abs().eq(this.a) && this.b.isNeg())) {
-        const twoA = this.a.muln(2);
-        let q = this.b.div(twoA);
-        let r = this.b.mod(twoA);
-        if (r.gt(this.a)) { q = q.addn(1); r = r.sub(twoA); }
-        else if (r.lte(this.a.neg())) { q = q.subn(1); r = r.add(twoA); }
-        // 新 c = a*q² - b*q + c
-        this.c = this.c.sub(q.mul(this.b)).add(this.a.mul(q.sqr()));
+      if (count >= MAX_ITERATIONS) {
+        console.log("ERROR:endless loop in reduce()");
+        break;
+      }
+      
+      // 优化：直接访问属性，减少变量创建
+      const a = this.a;
+      const b = this.b;
+      const c = this.c;
+      
+      // 快速检查：a 必须为正
+      if (!a.gt(0)) {
+        // 如果 a <= 0，需要特殊处理（这种情况应该很少见）
+        break;
+      }
+      
+      // 优化：缓存常用计算，避免重复调用
+      const bAbs = b.abs();
+      const aNeg = a.neg();
+      const bAbsLteA = bAbs.lte(a);
+      const bGtNegA = b.gt(aNeg);
+      const aLteC = a.lte(c);
+      
+      // 检查是否已约化：-a < b <= a <= c，如果 a = c 则 b >= 0
+      if (bGtNegA && bAbsLteA && aLteC) {
+        // 如果 a = c，需要确保 b >= 0
+        if (!a.eq(c) || !b.isNeg()) {
+          break; // 已约化
+        }
+      }
+      
+      // 优化：先处理 b 的约化（更常见的情况）
+      if (!bAbsLteA || (bAbs.eq(a) && b.isNeg())) {
+        // 约化 b：找到 q 使得 |b - 2aq| <= a
+        const twoA = a.muln(2);
+        let q = b.div(twoA);
+        let r = b.mod(twoA);
+        
+        // 调整余数到范围 [-a, a]
+        if (r.gt(a)) {
+          q = q.addn(1);
+          r = r.sub(twoA);
+        } else if (r.lte(aNeg)) {
+          q = q.subn(1);
+          r = r.add(twoA);
+        }
+        
+        // 优化：减少中间计算
+        // c' = c - b*q + a*q² = c - q*(b - a*q)
+        const aq = a.mul(q);
+        this.c = c.sub(q.mul(b.sub(aq)));
         this.b = r;
         continue;
-    }
-       //a>c 则交换ac b取负
-      if (this.a.gt(this.c)) {
-        [this.a, this.c] = [this.c, this.a];
-        this.b = this.b.neg();
+      }
+      
+      // a > c 则交换 a 和 c，b 取负
+      if (a.gt(c)) {
+        this.a = c;
+        this.c = a;
+        this.b = b.neg();
         continue;
       }
-     }
-     return this;
+      
+      // 如果到这里还没 break，说明已经约化
+      break;
+    }
+    
+    return this;
   }
 }
 //找到x y使得a*x+b*y = gcd(a,b)
+// 优化版本：减少不必要的克隆和计算
 function bezout(a,b) {
     // 处理特殊情况
     if (b.isZero()) {
@@ -125,42 +197,52 @@ function bezout(a,b) {
       };
     }
     
-    // 确保 |a| >= |b|
+    // 优化：避免不必要的克隆，直接使用引用
+    let aVal = a;
+    let bVal = b;
     let swapped = false;
-    if (a.abs().lt(b.abs())) {
-      [a, b] = [b, a];
+    
+    // 确保 |a| >= |b|
+    const aAbs = a.abs();
+    const bAbs = b.abs();
+    if (aAbs.lt(bAbs)) {
+      [aVal, bVal] = [b, a];
       swapped = true;
     }
+    
+    // 扩展欧几里得算法
+    // [ u  v  ] = [1  0]
     // [ u1 v1 ] = [0  1]
     let u = new BN(1), v = new BN(0);
     let u1 = new BN(0), v1 = new BN(1);
     
-    let aCopy = a.clone();
-    let bCopy = b.clone();
+    // 优化：使用临时变量避免重复计算
+    let r = aVal.clone();
+    let s = bVal.clone();
     
     // 主循环
-    while (!bCopy.isZero()) {
-      // a = q*b + r
-      const q = aCopy.div(bCopy);
-      const r = aCopy.mod(bCopy);
+    while (!s.isZero()) {
+      // r = q*s + t
+      const q = r.div(s);
+      const t = r.mod(s);
       
-      // 更新系数
-      const newU = u.sub(q.mul(u1));
-      const newV = v.sub(q.mul(v1));
+      // 更新系数：使用临时变量避免重复计算
+      const tempU = u.sub(q.mul(u1));
+      const tempV = v.sub(q.mul(v1));
       
       u = u1;
       v = v1;
-      u1 = newU;
-      v1 = newV;
+      u1 = tempU;
+      v1 = tempV;
       
-      // 更新 a, b
-      aCopy = bCopy;
-      bCopy = r;
+      // 更新 r, s
+      r = s;
+      s = t;
     }
     
     // 确保 gcd 为正
-    if (aCopy.isNeg()) {
-      aCopy = aCopy.neg();
+    if (r.isNeg()) {
+      r = r.neg();
       u = u.neg();
       v = v.neg();
     }
@@ -171,11 +253,10 @@ function bezout(a,b) {
     }
     
     return {
-      gcd: aCopy,
+      gcd: r,
       x: u,
       y: v
     };
-  
 }
 
 

@@ -1,9 +1,7 @@
 //puzzle相关功能
 
 import { randomBytes, bytesToNumberBE } from '@noble/curves/utils.js';
-import crypto from 'crypto';
 import rsorc from './rsorc.js';
-import EC  from "elliptic"; 
 import BN from "bn.js";
 import params from './params.js';
 import types from './types.js';
