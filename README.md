@@ -23,10 +23,15 @@ first run in terminal to start virtual chains
 ganache --port=8545 --detach
 ganache --port=7545 --detach
 ```
-then run Client.js
+you can run this to see all virual chains running
+```bash
+ganache instances list
+```
+then run Client.js (original version)
+or run newClient.js (improved version)
 
 after test, run
 ```bash
-ganache instances stop
+ganache instances stop (ganache instance name)
 ```
-to stop all
+to stop the instance

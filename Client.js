@@ -96,6 +96,7 @@ class protocalData{
     }
     //总函数
     async main() {
+        const start = performance.now();
         await this.setUp();
          this.phaseOne();
          this.phasetwo();
@@ -108,6 +109,8 @@ class protocalData{
         console.log("Gas used on blockchainB: ", this.B2.gasUsed);
         //清除链接
         await this.cleanup();
+        const end = performance.now();
+        //console.log(`Execution time: ${(end - start) / 1000} seconds`);
         return;
     }
     //生成参数阶段
@@ -289,6 +292,6 @@ class protocalData{
     }
 };
 
-const test = new protocalData(4);
+const test = new protocalData(1);
 test.main();
 
