@@ -50,14 +50,20 @@ class protocalData {
         this.PuzSov = new Array(num * testNum);
         this.sigmaTB = new Array(num * testNum);
         this.sigmaS = new Array(num * testNum);
+        this.rTime=0;
+        this.sTime=0;
+        this.tTime=0;
     }
 
     async main() {
         await this.setUp();
-        const start = performance.now();
+        //const start = performance.now();
         await this.phaseOne();
         await this.phasetwo();
-        console.log(`Offline time: ${(performance.now() - start) / 1000} seconds`);
+        //console.log(`Offline time: ${(performance.now() - start) / 1000} seconds`);
+        console.log("(each) Receiver time: ", this.rTime/(this.num*testNum) , " seconds");
+        console.log("(each) Sender time: ", this.sTime/(this.num*testNum) , " seconds");
+        console.log("Tumbler time: ", this.tTime, " seconds");
         await this.processOnChain();
         console.log("Complete ", this.num*testNum, " pairs of cross-chain ctx.");
         console.log("Gas used on blockchainA: ", this.B1.gasUsed);
@@ -71,35 +77,55 @@ class protocalData {
         this.clKey = clKeyGen();
         this.rsrcKey = rsorcKeyGen();
         this.sumRCpt = clEnk(this.clKey.pk, this.clKey.sk);
-        this.prover = new SigmaProver(new Array(8).fill(BASE2), 4, 2);
-        this.verifier = new SigmaVerifier(new Array(8).fill(BASE2), 4, 2);
+        //ooom证明密钥
+        this.n = 4;
+        this.m = 2*this.num;
+        this.h_gens = new Array(this.n * this.m);
+        for (let i = 0; i < this.h_gens.length; i++) {
+            this.h_gens[i] = RandomG1Point();
+        }
+        this.h_gens[0] = BASE2;
+        this.prover = new SigmaProver(this.h_gens,this.n,this.m);
+        this.verifier = new SigmaVerifier(this.h_gens,this.n,this.m)
     }
 
     async phaseOne() {
+        const rTimes = [];
         await Promise.all(Array.from({ length: this.num * testNum }).map((_, ind) => limit(async () => {
+            const rstart = performance.now();
             const v = BigInt(Math.floor(Math.random() * 21));
             this.vsum += v;
             const req = PuzzleRequest(v, this.B2.accList[8].address);
             req.com_2 = RandomG1Point();
             req.ctxR = new BN(ctxHash(this.B2.accList[8].address, this.B2.accList[ind % testNum].address, req.com_R), 16);
             this.PuzReq[ind] = req;
-            const start = performance.now();
-            this.PuzPro[ind] = PuzzlePromise(this.clKey, this.B2.accList[8].key, this.rsrcKey, req.ctxR, req.com_R, req.com_2);
             this.valueRq[ind] = { v, r: req.r };
-            this.commits[ind] = req.com_R;
-            console.log(`PuzzlePromise time: ${(performance.now() - start) / 1000} seconds`);
+            const tstart = performance.now();
+            rTimes.push((tstart - rstart) / 1000);
         })));
+        this.rTime += rTimes.reduce((a, b) => a + b, 0);
+        const tstart = performance.now();
+        await Promise.all(Array.from({ length: this.num * testNum }).map((_, ind) => limit(async () => {
+            
+            const req = this.PuzReq[ind];
+            this.PuzPro[ind] = PuzzlePromise(this.clKey, this.B2.accList[8].key, this.rsrcKey, req.ctxR, req.com_R, req.com_2);
+            //this.valueRq[ind] = { v, r: req.r };
+            this.commits[ind] = req.com_R;
+            //console.log(`PuzzlePromise time: ${(performance.now() - start) / 1000} seconds`);
+        })));
+        this.tTime += (performance.now() - tstart)/1000;
+
     }
 
     async phasetwo() {
     //console.log("***Phase2: Puzzle Solving and process ...");
-
+    const sstart = performance.now();
     // 并行处理：谜题求解、同态加法、OOOM 证明生成
     await Promise.all(this.PuzReq.map((_, ind) => limit(async () => {
         const i = ind % testNum;
         
         // 谜题求解
-        const start = performance.now();
+        //const start = performance.now();
         this.PuzSov[ind] = PuzzleSove(
             this.B1.accList[i].address, 
             this.B1.accList[8].address,
@@ -131,9 +157,10 @@ class protocalData {
         const cs = this.PuzSov[ind].com_S;
         let commits = this.commits.map(c => c.negate().add(cs));
         this.PuzSov[ind].pi = this.prover.prove(commits, ind, beta_BE);
-        console.log(`PuzzleSovReq time: ${(performance.now() - start) / 1000} seconds`);
+        //console.log(`PuzzleSovReq time: ${(performance.now() - start) / 1000} seconds`);
     })));
-
+    const tstart = performance.now();
+    this.sTime += (tstart - sstart)/1000;
     // 2. 余额平衡性验证
     const com_t = commit(this.vsum, this.rsum);
     if (!com_t.equals(this.sum_coms)) {
@@ -149,8 +176,10 @@ class protocalData {
         if (!this.verifier.verify(commits, this.PuzSov[ind].pi)) {
             throw new Error(`ERROR: invalid OMMM proof at index ${ind}`);
         }
-
+    })));
+    await Promise.all(this.PuzReq.map((_, ind) => limit(async () => {
         // 执行 Escrow 流程
+        const cs = this.PuzSov[ind].com_S;
         this.sigmaS[ind] = ProcessEscrow(
             this.clKey, this.rsrcKey, this.PuzSov[ind].ctxS, 
             this.PuzSov[ind].cRand, this.PuzSov[ind].A1Rand, this.PuzSov[ind].A2Rand, 
@@ -161,7 +190,10 @@ class protocalData {
         if (!this.sigmaS[ind]) {
             throw new Error(`Error: cannot solve puzzle at index ${ind}`);
         }
-
+    })));
+    const rstart = performance.now();
+    this.tTime += (rstart - tstart)/1000;
+    await Promise.all(this.PuzReq.map((_, ind) => limit(async () => {
         // 执行 Redeem 流程
         const PR = ProcessRedeem(
             this.sigmaS[ind], this.PuzSov[ind].Asig, 
@@ -171,7 +203,7 @@ class protocalData {
         );
         this.sigmaTB[ind] = PR.sig;
     })));
-    
+    this.rTime += (performance.now() - rstart)/1000;
     //console.log("Phase2 completed successfully.");
 }
     
@@ -193,5 +225,5 @@ class protocalData {
         this.B2.web3.currentProvider.disconnect?.();
     }
 }
-const test = new protocalData(1);
+const test = new protocalData(8);
 test.main();

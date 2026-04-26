@@ -18,19 +18,19 @@ npm install -g ganache
 In the main directory, type `yarn` to install all dependencies.
 
 ## Running Tests
-first run in terminal to start virtual chains
+First run in terminal to start virtual chains
 ```bash
 ganache --port=8545 --detach
 ganache --port=7545 --detach
 ```
-you can run this to see all virual chains running
+You can run this to see all virual chains running
 ```bash
 ganache instances list
 ```
-then run Client.js (original version)
+Then run Client.js (original version)
 or run newClient.js (improved version)
 
-after test, run
+After test, run
 ```bash
 ganache instances stop (ganache instance name)
 ```
